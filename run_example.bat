@@ -1,3 +1,4 @@
 @echo off
-python main.py input\test_accelerometer_xyz.csv --profile contest --config-file examples\contest.json
+cd /d "%~dp0"
+python main.py --mode validation
 pause

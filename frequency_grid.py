@@ -1,29 +1,15 @@
-"""Loading and generating validated SRS oscillator-frequency grids."""
+"""Load the exact competition grid or generate a research grid."""
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 
-try:
-    from .data_models import FrequencyGrid
-except ImportError:  # Direct execution with files in one directory.
-    from data_models import FrequencyGrid
-
-
-def _validated_frequencies(values: Iterable[float] | np.ndarray) -> np.ndarray:
-    frequencies = np.asarray(tuple(values) if not isinstance(values, np.ndarray) else values, dtype=np.float64)
-    if frequencies.ndim != 1 or frequencies.size < 2:
-        raise ValueError("Frequency grid must be a one-dimensional array of at least two values")
-    if not np.all(np.isfinite(frequencies)):
-        raise ValueError("Frequency grid contains NaN or infinity")
-    if np.any(frequencies <= 0):
-        raise ValueError("Frequency grid values must be positive")
-    if np.any(np.diff(frequencies) <= 0):
-        raise ValueError("Frequency grid must be strictly increasing")
-    return frequencies
+from config import FrequencyGridConfig
+from paths import PROJECT_DIR
+from validation import frequency_array
 
 
 def fractional_octave_step_error(
@@ -31,7 +17,7 @@ def fractional_octave_step_error(
     octave_fraction: int,
 ) -> float:
     """Return the maximum relative error from an ideal 1/N-octave ratio."""
-    frequencies = _validated_frequencies(frequencies_hz)
+    frequencies = frequency_array(frequencies_hz, minimum_size=2)
     if octave_fraction < 1:
         raise ValueError("octave_fraction must be a positive integer")
     ideal_ratio = 2.0 ** (1.0 / octave_fraction)
@@ -66,7 +52,7 @@ def load_frequency_grid_csv(
     expected_stop_hz: float | None = None,
     bound_tolerance_fraction: float = 1.0e-5,
     step_tolerance_fraction: float = 5.0e-4,
-) -> FrequencyGrid:
+) -> np.ndarray:
     """Load the exact one-column competition grid without modifying values.
 
     Blank lines are ignored.  An optional first-line text header is accepted.
@@ -103,7 +89,7 @@ def load_frequency_grid_csv(
                 ) from exc
             values.append(value)
 
-    frequencies = _validated_frequencies(values)
+    frequencies = frequency_array(values, minimum_size=2)
     if expected_count is not None and frequencies.size != expected_count:
         raise ValueError(
             f"Frequency grid contains {frequencies.size} values, expected {expected_count}"
@@ -124,59 +110,81 @@ def load_frequency_grid_csv(
             f"{step_tolerance_fraction:.6g}"
         )
 
-    return FrequencyGrid(
-        frequencies_hz=frequencies,
-        source="csv",
-        octave_fraction=octave_fraction,
-        source_name=input_path.name,
-        maximum_step_error_fraction=step_error,
-    )
+    return frequencies
 
 
 def generate_fractional_octave_grid(
     start_hz: float,
     stop_hz: float,
     octave_fraction: int = 12,
-) -> FrequencyGrid:
+) -> np.ndarray:
     """Generate a research 1/N-octave grid, never the competition grid."""
-    if not np.isfinite(start_hz) or not np.isfinite(stop_hz) or not 0 < start_hz < stop_hz:
+    if (
+        not np.isfinite(start_hz)
+        or not np.isfinite(stop_hz)
+        or not 0 < start_hz < stop_hz
+    ):
         raise ValueError("Require finite 0 < start_hz < stop_hz")
     if octave_fraction < 1:
         raise ValueError("octave_fraction must be a positive integer")
     ratio = 2.0 ** (1.0 / octave_fraction)
     point_count = int(np.floor(np.log(stop_hz / start_hz) / np.log(ratio))) + 1
     frequencies = start_hz * ratio ** np.arange(point_count, dtype=np.float64)
-    return FrequencyGrid(
-        frequencies_hz=frequencies,
-        source="fractional_octave",
-        octave_fraction=octave_fraction,
-        maximum_step_error_fraction=fractional_octave_step_error(
-            frequencies, octave_fraction
-        ),
-    )
+    return frequencies
 
 
 def frequency_grid_from_values(
     values_hz: Iterable[float] | np.ndarray,
-) -> FrequencyGrid:
+) -> np.ndarray:
     """Create a validated research grid from explicit frequencies."""
-    return FrequencyGrid(
-        frequencies_hz=_validated_frequencies(values_hz),
-        source="explicit",
-    )
+    return frequency_array(values_hz, minimum_size=2)
 
 
 def generate_logarithmic_grid(
     start_hz: float,
     stop_hz: float,
     point_count: int,
-) -> FrequencyGrid:
+) -> np.ndarray:
     """Generate a logarithmic research grid with an exact endpoint."""
-    if not np.isfinite(start_hz) or not np.isfinite(stop_hz) or not 0 < start_hz < stop_hz:
+    if (
+        not np.isfinite(start_hz)
+        or not np.isfinite(stop_hz)
+        or not 0 < start_hz < stop_hz
+    ):
         raise ValueError("Require finite 0 < start_hz < stop_hz")
     if point_count < 2:
         raise ValueError("point_count must be at least 2")
-    return FrequencyGrid(
-        frequencies_hz=np.geomspace(start_hz, stop_hz, point_count),
-        source="logarithmic",
-    )
+    return np.geomspace(start_hz, stop_hz, point_count)
+
+
+def frequencies_from_config(
+    config: FrequencyGridConfig,
+) -> tuple[np.ndarray, tuple[str, ...]]:
+    """Build the configured grid, preserving exact CSV frequency values."""
+    if config.source == "csv":
+        path = config.source_file
+        if not path.is_absolute() and not path.is_file():
+            path = PROJECT_DIR / path
+        frequencies = load_frequency_grid_csv(
+            path,
+            octave_fraction=config.octave_fraction,
+            expected_start_hz=config.start_hz,
+        )
+    elif config.source == "fractional_octave":
+        frequencies = generate_fractional_octave_grid(
+            config.start_hz, config.stop_hz, config.octave_fraction
+        )
+    elif config.source == "explicit":
+        frequencies = frequency_grid_from_values(config.frequencies_hz)
+    elif config.source == "logarithmic":
+        frequencies = generate_logarithmic_grid(
+            config.start_hz, config.stop_hz, config.point_count
+        )
+    else:
+        raise ValueError(f"Unsupported frequency-grid source: {config.source!r}")
+    warnings = ()
+    if config.source == "csv" and frequencies[-1] < config.stop_hz:
+        warnings = (
+            f"Fixed grid ends at {frequencies[-1]:.9g} Hz, below configured fmax={config.stop_hz:.9g} Hz",
+        )
+    return frequencies, warnings
