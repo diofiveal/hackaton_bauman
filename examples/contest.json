@@ -1,0 +1,11 @@
+{
+  "tail_mode": "frame_only",
+  "tail_time_constants": 5.0,
+  "compensation": {
+    "magnitude_mode": "dynamic_magnitude",
+    "method": "confirmed_rest",
+    "rest_start_s": 84.362138,
+    "rest_end_s": 84.37,
+    "minimum_rest_samples": 3
+  }
+}
