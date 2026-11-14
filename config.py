@@ -19,6 +19,7 @@ from typing import Any, Literal
 
 
 ProfileName = Literal["contest", "custom"]
+ProcessingMode = Literal["validation", "contest"]
 SpectrumType = Literal["maximax"]
 ResponseType = Literal["absolute_acceleration"]
 GridSource = Literal["csv", "fractional_octave", "explicit", "logarithmic"]
@@ -109,17 +110,23 @@ class StaticCompensationConfig:
     method: CompensationMethod = "none"
     rest_start_s: float | None = None
     rest_end_s: float | None = None
-    minimum_rest_samples: int = 3
-    maximum_rest_std_g: float | None = None
+    # Conservative engineering limits (not specified by the hackathon jury).
+    minimum_rest_samples: int = 32
+    maximum_rest_std_g: float | None = 0.10
+    maximum_rest_peak_to_peak_g: float | None = 0.50
+    maximum_gravity_norm_deviation_g: float | None = 0.35
 
     def __post_init__(self) -> None:
         if self.minimum_rest_samples < 3:
             raise ValueError("compensation.minimum_rest_samples must be at least 3")
-        if self.maximum_rest_std_g is not None:
-            _require_positive_finite(
-                self.maximum_rest_std_g,
-                "compensation.maximum_rest_std_g",
-            )
+        for field_name in (
+            "maximum_rest_std_g",
+            "maximum_rest_peak_to_peak_g",
+            "maximum_gravity_norm_deviation_g",
+        ):
+            value = getattr(self, field_name)
+            if value is not None:
+                _require_positive_finite(value, f"compensation.{field_name}")
 
         interval_is_set = self.rest_start_s is not None or self.rest_end_s is not None
         if interval_is_set:
@@ -131,6 +138,15 @@ class StaticCompensationConfig:
                 and 0.0 <= self.rest_start_s < self.rest_end_s
             ):
                 raise ValueError("Require 0 <= rest_start_s < rest_end_s")
+
+        if self.method == "none" and interval_is_set:
+            raise ValueError(
+                "Do not specify rest interval when compensation.method='none'"
+            )
+        if self.method == "confirmed_rest" and not interval_is_set:
+            raise ValueError(
+                "confirmed_rest requires rest_start_s and rest_end_s"
+            )
 
         if self.magnitude_mode == "dynamic_magnitude":
             if self.method != "confirmed_rest" or not interval_is_set:
@@ -171,6 +187,13 @@ class InputConfig:
     acceleration_unit: Literal["g"] = "g"
     required_axis_channels: tuple[str, ...] = ("ax", "ay", "az")
     calculate_resultant_acceleration: bool = True
+    # True ONLY when external preprocessing has already removed gravity and bias.
+    # This flag does not perform any numerical correction.
+    gravity_compensated: bool = False
+
+    def __post_init__(self) -> None:
+        if type(self.gravity_compensated) is not bool:
+            raise ValueError("input.gravity_compensated must be a boolean")
 
 
 @dataclass(frozen=True)
@@ -178,6 +201,7 @@ class SRSConfig:
     """Single immutable configuration structure for the SRS pipeline."""
 
     profile: ProfileName = "contest"
+    processing_mode: ProcessingMode = "contest"
     sample_rate_hz: float = 6660.0
     quality_factor_q: float | None = 10.0
     damping_ratio_zeta: float | None = 0.05
@@ -197,6 +221,8 @@ class SRSConfig:
     input: InputConfig = field(default_factory=InputConfig)
 
     def __post_init__(self) -> None:
+        if self.processing_mode not in {"contest", "validation"}:
+            raise ValueError("processing_mode must be 'contest' or 'validation'")
         _require_positive_finite(self.sample_rate_hz, "sample_rate_hz")
 
         q = self.quality_factor_q
@@ -339,6 +365,10 @@ def _validate_contest_requirements(config: SRSConfig) -> None:
         "event.trigger_mode": (
             config.event.trigger_mode,
             expected.event.trigger_mode,
+        ),
+        "event.gravity_excluded_from_trigger": (
+            config.event.gravity_excluded_from_trigger,
+            expected.event.gravity_excluded_from_trigger,
         ),
         "event.frame_level_fraction_of_amax": (
             config.event.frame_level_fraction_of_amax,

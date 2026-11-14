@@ -1,0 +1,37 @@
+{
+  "input_file": "input\\raw_signal_0051.csv",
+  "status": "validation_completed",
+  "processing_mode": "validation",
+  "srs_input_sample_count": 450,
+  "compensation_applied": false,
+  "gravity_handling": "raw_full_record",
+  "sample_count": 450,
+  "sample_rate_hz": 6660.041235890863,
+  "warnings": [
+    "Fixed grid ends at 2113.48926 Hz, below configured fmax=2500 Hz"
+  ],
+  "srs": {
+    "frequency_count": 94,
+    "quality_factor_q": 10.0,
+    "tail_mode": "frame_only",
+    "tail_time_constants": 5.0,
+    "peaks": {
+      "gx": {
+        "value_g": 4.23391604014992,
+        "frequency_hz": 421.696502686
+      },
+      "gy": {
+        "value_g": 13.253957543566564,
+        "frequency_hz": 94.4061050415
+      },
+      "gz": {
+        "value_g": 21.848348229443985,
+        "frequency_hz": 66.8343963623
+      },
+      "g_total": {
+        "value_g": 17.807917042877275,
+        "frequency_hz": 66.8343963623
+      }
+    }
+  }
+}

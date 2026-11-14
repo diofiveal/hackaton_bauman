@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 
@@ -14,7 +14,7 @@ try:
         detect_event_frame,
         resolve_static_compensation,
     )
-    from .config import SRSConfig
+    from .config import ProcessingMode, SRSConfig, StaticCompensationConfig
     from .csv_io import AccelerationData, load_acceleration_csv
     from .data_models import EventFrame, SRSResult
     from .smallwood import calculate_srs_xyz
@@ -24,13 +24,13 @@ except ImportError:  # Direct execution with files in one directory.
         detect_event_frame,
         resolve_static_compensation,
     )
-    from config import SRSConfig
+    from config import ProcessingMode, SRSConfig, StaticCompensationConfig
     from csv_io import AccelerationData, load_acceleration_csv
     from data_models import EventFrame, SRSResult
     from smallwood import calculate_srs_xyz
 
 
-PipelineStatus = Literal["event_processed", "no_event"]
+PipelineStatus = Literal["validation_completed", "event_processed", "no_event"]
 
 
 @dataclass(frozen=True)
@@ -60,6 +60,7 @@ class PipelineResult:
     frame_data: EventAccelerationData | None
     srs_result: SRSResult | None
     status: PipelineStatus
+    mode: ProcessingMode = "contest"
     warnings: tuple[str, ...] = ()
 
     def srs_table(self) -> np.ndarray | None:
@@ -95,8 +96,13 @@ def _check_pipeline_limits(data: AccelerationData, config: SRSConfig) -> None:
 def run_srs_pipeline(
     csv_path: str | Path,
     config: SRSConfig,
+    *,
+    mode: ProcessingMode | None = None,
 ) -> PipelineResult:
-    """Run the complete reference calculation for the first shock event."""
+    """Run full-record validation or gravity-safe first-event contest mode."""
+    selected_mode = config.processing_mode if mode is None else mode
+    if selected_mode not in {"contest", "validation"}:
+        raise ValueError("mode must be 'contest' or 'validation'")
     data = load_acceleration_csv(
         csv_path,
         time_unit=config.input.time_unit,
@@ -110,12 +116,54 @@ def run_srs_pipeline(
     )
     _check_pipeline_limits(data, config)
 
-    compensation = resolve_static_compensation(data, config.compensation)
-    if config.event.gravity_excluded_from_trigger and compensation is None:
-        raise ValueError(
-            "The trigger must exclude gravity, but no confirmed-rest "
-            "compensation is configured"
+    if selected_mode == "validation":
+        # Use ALL recorded samples, without detection or gravity subtraction.
+        # The replacement also prevents calculate_srs_xyz() from estimating a
+        # compensation vector from a config intended for contest mode.
+        raw_config = replace(
+            config,
+            compensation=StaticCompensationConfig(
+                method="none", magnitude_mode="raw_magnitude"
+            ),
         )
+        srs_result = calculate_srs_xyz(data, raw_config)
+        return PipelineResult(
+            source_data=data,
+            compensation=None,
+            event_frame=None,
+            frame_data=None,
+            srs_result=srs_result,
+            status="validation_completed",
+            mode="validation",
+            warnings=data.warnings + srs_result.warnings,
+        )
+
+    if not config.event.gravity_excluded_from_trigger:
+        raise ValueError(
+            "Contest mode requires gravity_excluded_from_trigger=True; "
+            "the 3g threshold must be applied after gravity removal"
+        )
+
+    # A gravity-free 3 g trigger is only meaningful with a verified source.
+    # A rest-derived vector corrects raw samples; alternatively firmware may
+    # supply already-compensated values (explicitly declared by the user).
+    if config.input.gravity_compensated and config.compensation.method != "none":
+        raise ValueError(
+            "Input is marked as already gravity-compensated; do not apply "
+            "a second confirmed-rest compensation"
+        )
+    if config.event.gravity_excluded_from_trigger and (
+        config.compensation.method == "none"
+        and not config.input.gravity_compensated
+    ):
+        raise ValueError(
+            "Contest requires a 3g trigger excluding gravity. Choose a "
+            "verified rest interval with --rest-start/--rest-end, or pass "
+            "--input-gravity-compensated ONLY if the CSV already excludes "
+            "gravity and static bias. Uncompensated raw data are unsafe "
+            "for the specified threshold."
+        )
+    compensation = resolve_static_compensation(data, config.compensation)
 
     event_frame = detect_event_frame(
         data,
@@ -133,6 +181,7 @@ def run_srs_pipeline(
             frame_data=None,
             srs_result=None,
             status="no_event",
+            mode="contest",
             warnings=data.warnings,
         )
 
@@ -149,5 +198,6 @@ def run_srs_pipeline(
         frame_data=frame_data,
         srs_result=srs_result,
         status="event_processed",
+        mode="contest",
         warnings=data.warnings + srs_result.warnings,
     )

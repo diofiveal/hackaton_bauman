@@ -41,6 +41,12 @@ def _create_argument_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--mode",
+        choices=("validation", "contest"),
+        default=None,
+        help="Processing mode: validation=whole raw record; contest=detected 3g shock frame",
+    )
+    parser.add_argument(
         "--profile",
         choices=("contest", "custom"),
         default="contest",
@@ -60,6 +66,16 @@ def _create_argument_parser() -> argparse.ArgumentParser:
         "--rest-end",
         type=float,
         help="Confirmed rest interval end in seconds",
+    )
+    parser.add_argument(
+        "--no-compensation",
+        action="store_true",
+        help="Disable rest compensation (contest then needs --input-gravity-compensated)",
+    )
+    parser.add_argument(
+        "--input-gravity-compensated",
+        action="store_true",
+        help="Assert CSV already excludes gravity and bias (do not use on raw data)",
     )
     parser.add_argument(
         "--tail-mode",
@@ -122,8 +138,18 @@ def _create_argument_parser() -> argparse.ArgumentParser:
 def _command_line_overrides(args: argparse.Namespace) -> dict[str, Any]:
     if (args.rest_start is None) != (args.rest_end is None):
         raise ValueError("--rest-start and --rest-end must be specified together")
+    if args.no_compensation and args.rest_start is not None:
+        raise ValueError("--no-compensation conflicts with --rest-start/--rest-end")
+    if args.input_gravity_compensated and args.rest_start is not None:
+        raise ValueError("Already-compensated input conflicts with rest compensation")
+    if args.mode == "validation" and (
+        args.rest_start is not None or args.input_gravity_compensated
+    ):
+        raise ValueError("Validation uses the full raw signal; no compensation flags")
 
     overrides: dict[str, Any] = {}
+    if args.mode is not None:
+        overrides["processing_mode"] = args.mode
     if args.rest_start is not None:
         overrides.update(
             {
@@ -133,6 +159,15 @@ def _command_line_overrides(args: argparse.Namespace) -> dict[str, Any]:
                 "compensation.rest_end_s": args.rest_end,
             }
         )
+    if args.no_compensation:
+        overrides.update({
+            "compensation.method": "none",
+            "compensation.magnitude_mode": "raw_magnitude",
+            "compensation.rest_start_s": None,
+            "compensation.rest_end_s": None,
+        })
+    if args.input_gravity_compensated:
+        overrides["input.gravity_compensated"] = True
     if args.tail_mode is not None:
         overrides["tail_mode"] = args.tail_mode
     if args.tail_time_constants is not None:
@@ -152,6 +187,24 @@ def _metadata(result: PipelineResult, input_path: Path) -> dict[str, Any]:
     document: dict[str, Any] = {
         "input_file": str(input_path),
         "status": result.status,
+        "processing_mode": result.mode,
+        "srs_input_sample_count": (
+            result.source_data.sample_count
+            if result.mode == "validation"
+            else (result.frame_data.sample_count if result.frame_data is not None else 0)
+        ),
+        "compensation_applied": (
+            result.mode == "contest" and result.compensation is not None
+        ),
+        "gravity_handling": (
+            "raw_full_record"
+            if result.mode == "validation"
+            else (
+                "checked_rest_vector"
+                if result.compensation is not None
+                else "declared_precompensated_input"
+            )
+        ),
         "sample_count": result.source_data.sample_count,
         "sample_rate_hz": float(result.source_data.sample_rate_hz),
         "warnings": list(result.warnings),
@@ -166,6 +219,8 @@ def _metadata(result: PipelineResult, input_path: Path) -> dict[str, Any]:
             "rest_end_s": result.compensation.rest_end_s,
             "sample_count": result.compensation.sample_count,
             "maximum_rest_std_g": result.compensation.maximum_rest_std_g,
+            "max_rest_peak_to_peak_g": result.compensation.max_rest_peak_to_peak_g,
+            "gravity_vector_norm_g": result.compensation.gravity_vector_norm_g,
         }
 
     if result.event_frame is not None and result.frame_data is not None:
@@ -231,20 +286,24 @@ def _print_summary(
     plot_path: Path,
 ) -> None:
     print("SRS pipeline completed")
+    print(f"Mode: {result.mode}")
     print(f"Status: {result.status}")
     print(f"Input samples: {result.source_data.sample_count}")
     print(f"Measured sample rate: {result.source_data.sample_rate_hz:.6f} Hz")
 
-    if result.event_frame is None or result.srs_result is None:
+    if result.srs_result is None:
         print("Shock event above the configured threshold was not found")
     else:
-        frame = result.event_frame
         spectrum = result.srs_result
-        print(
-            f"Event frame: samples {frame.start_index}..{frame.end_index} "
-            f"({frame.sample_count} samples)"
-        )
-        print(f"Amax: {frame.amax_g:.6f} g")
+        if result.mode == "validation":
+            print(f"SRS input: FULL record ({result.source_data.sample_count} samples)")
+        elif result.event_frame is not None:
+            frame = result.event_frame
+            print(
+                f"Event frame: samples {frame.start_index}..{frame.end_index} "
+                f"({frame.sample_count} samples)"
+            )
+            print(f"Amax: {frame.amax_g:.6f} g")
         for name, values in (
             ("gx", spectrum.gx_g),
             ("gy", spectrum.gy_g),
@@ -275,6 +334,7 @@ def main() -> int:
             and using_example_input
             and args.rest_start is None
             and args.rest_end is None
+            and args.mode != "validation"
         ):
             config_file = DEFAULT_CONFIG_PATH
 
@@ -296,7 +356,9 @@ def main() -> int:
             title="Acceleration signal and detected shock frame",
         )
         _print_summary(result, args.output, args.metadata_output, args.plot_output)
-        if not args.no_envelope:
+        if not args.no_envelope and result.mode == "validation":
+            print("Envelope skipped: validation is a full-record reference, not a shock")
+        elif not args.no_envelope:
             if result.srs_result is None:
                 print("Envelope skipped: no shock was detected")
             else:

@@ -1,11 +1,16 @@
 {
+  "processing_mode": "contest",
   "tail_mode": "frame_only",
   "tail_time_constants": 5.0,
+  "input": {
+    "gravity_compensated": false
+  },
   "compensation": {
-    "magnitude_mode": "dynamic_magnitude",
-    "method": "confirmed_rest",
-    "rest_start_s": 84.362138,
-    "rest_end_s": 84.37,
-    "minimum_rest_samples": 3
+    "magnitude_mode": "raw_magnitude",
+    "method": "none",
+    "minimum_rest_samples": 32,
+    "maximum_rest_std_g": 0.10,
+    "maximum_rest_peak_to_peak_g": 0.50,
+    "maximum_gravity_norm_deviation_g": 0.35
   }
 }

@@ -51,6 +51,8 @@ class StaticCompensation:
     std_ax_g: float
     std_ay_g: float
     std_az_g: float
+    max_rest_peak_to_peak_g: float = 0.0
+    gravity_vector_norm_g: float = 0.0
 
     @property
     def vector_g(self) -> np.ndarray:
@@ -125,6 +127,8 @@ def estimate_static_compensation(
     *,
     minimum_samples: int = 3,
     maximum_rest_std_g: float | None = None,
+    maximum_rest_peak_to_peak_g: float | None = None,
+    maximum_gravity_norm_deviation_g: float | None = None,
 ) -> StaticCompensation:
     """Estimate gravity plus sensor offset from a confirmed rest interval.
 
@@ -132,8 +136,10 @@ def estimate_static_compensation(
     stationary and its orientation is representative.  The function does not
     search for rest automatically.
 
-    ``maximum_rest_std_g`` may be supplied to reject an interval that is too
-    noisy.  No universal threshold is assumed by default.
+    Rest quality is checked before a compensation vector is accepted:
+    per-axis standard deviation, peak-to-peak range, and (optionally) the
+    norm of the mean gravity vector (near 1 g for a calibrated sensor).
+    Thresholds are engineering choices set by config.py, not jury constants.
     """
     time_s, ax_g, ay_g, az_g = _validated_arrays(data)
 
@@ -146,10 +152,13 @@ def estimate_static_compensation(
         )
     if minimum_samples < 3:
         raise ValueError("minimum_samples must be at least 3")
-    if maximum_rest_std_g is not None and (
-        not np.isfinite(maximum_rest_std_g) or maximum_rest_std_g <= 0
+    for name, limit in (
+        ("maximum_rest_std_g", maximum_rest_std_g),
+        ("maximum_rest_peak_to_peak_g", maximum_rest_peak_to_peak_g),
+        ("maximum_gravity_norm_deviation_g", maximum_gravity_norm_deviation_g),
     ):
-        raise ValueError("maximum_rest_std_g must be positive and finite")
+        if limit is not None and (not np.isfinite(limit) or limit <= 0):
+            raise ValueError(f"{name} must be positive and finite")
 
     mask = (time_s >= rest_start_s) & (time_s <= rest_end_s)
     sample_count = int(np.count_nonzero(mask))
@@ -168,6 +177,12 @@ def estimate_static_compensation(
         dtype=np.float64,
     )
 
+    peak_to_peak = np.array(
+        [np.ptp(ax_g[mask]), np.ptp(ay_g[mask]), np.ptp(az_g[mask])],
+        dtype=np.float64,
+    )
+    mean_gravity_norm = float(np.linalg.norm(means))
+
     if (
         maximum_rest_std_g is not None
         and np.max(standard_deviations) > maximum_rest_std_g
@@ -176,6 +191,26 @@ def estimate_static_compensation(
             "Selected rest interval is too noisy: maximum axis standard "
             f"deviation is {np.max(standard_deviations):.6g} g, limit is "
             f"{maximum_rest_std_g:.6g} g"
+        )
+
+    if (
+        maximum_rest_peak_to_peak_g is not None
+        and np.max(peak_to_peak) > maximum_rest_peak_to_peak_g
+    ):
+        raise ValueError(
+            "Selected rest interval has excessive peak-to-peak variation: "
+            f"{np.max(peak_to_peak):.6g} g, limit "
+            f"{maximum_rest_peak_to_peak_g:.6g} g"
+        )
+    if (
+        maximum_gravity_norm_deviation_g is not None
+        and abs(mean_gravity_norm - 1.0) > maximum_gravity_norm_deviation_g
+    ):
+        raise ValueError(
+            "Selected rest interval has implausible mean gravity magnitude: "
+            f"{mean_gravity_norm:.6g} g; expected approximately 1 g "
+            f"(+/-{maximum_gravity_norm_deviation_g:.6g} g). "
+            "Check sensor units, calibration, orientation and rest interval."
         )
 
     return StaticCompensation(
@@ -188,6 +223,8 @@ def estimate_static_compensation(
         std_ax_g=float(standard_deviations[0]),
         std_ay_g=float(standard_deviations[1]),
         std_az_g=float(standard_deviations[2]),
+        max_rest_peak_to_peak_g=float(np.max(peak_to_peak)),
+        gravity_vector_norm_g=mean_gravity_norm,
     )
 
 
@@ -230,12 +267,16 @@ def resolve_static_compensation(
         float(rest_start_s),
         float(rest_end_s),
         minimum_samples=int(
-            getattr(compensation_config, "minimum_rest_samples", 3)
+            getattr(compensation_config, "minimum_rest_samples", 32)
         ),
         maximum_rest_std_g=getattr(
-            compensation_config,
-            "maximum_rest_std_g",
-            None,
+            compensation_config, "maximum_rest_std_g", None
+        ),
+        maximum_rest_peak_to_peak_g=getattr(
+            compensation_config, "maximum_rest_peak_to_peak_g", None
+        ),
+        maximum_gravity_norm_deviation_g=getattr(
+            compensation_config, "maximum_gravity_norm_deviation_g", None
         ),
     )
 
