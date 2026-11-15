@@ -1,5 +1,5 @@
 {
-  "input_file": "input\\raw_signal_1.csv",
+  "input_file": "C:\\Users\\Дмитрий Кочнев\\Desktop\\Хакатон Бюро\\SRS_refactor_stage1\\SRS_pipeline_with_bin_converter\\hackaton_bauman\\input\\raw_signal_3.csv",
   "status": "validation_completed",
   "processing_mode": "validation",
   "srs_input_sample_count": 469,
@@ -17,19 +17,19 @@
     "tail_time_constants": 5.0,
     "peaks": {
       "gx": {
-        "value_g": 14.262622534596378,
+        "value_g": 10.327619099378506,
         "frequency_hz": 421.696502686
       },
       "gy": {
-        "value_g": 31.34467539205705,
+        "value_g": 19.542588375100706,
         "frequency_hz": 84.139503479
       },
       "gz": {
-        "value_g": 28.238435384768536,
+        "value_g": 19.147879688814946,
         "frequency_hz": 42.1696548462
       },
       "g_total": {
-        "value_g": 20.124170900555036,
+        "value_g": 13.97822964636899,
         "frequency_hz": 125.892532349
       }
     }

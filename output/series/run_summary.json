@@ -1,0 +1,146 @@
+{
+  "mode": "validation",
+  "profile": "contest",
+  "input_dir": "C:\\Users\\Дмитрий Кочнев\\Desktop\\Хакатон Бюро\\SRS_refactor_stage1\\SRS_pipeline_with_bin_converter\\hackaton_bauman\\input",
+  "output_dir": "C:\\Users\\Дмитрий Кочнев\\Desktop\\Хакатон Бюро\\SRS_refactor_stage1\\SRS_pipeline_with_bin_converter\\hackaton_bauman\\output\\series",
+  "requested_files": 3,
+  "calculated_spectra": 3,
+  "reference_spectra": 3,
+  "frequency_points": 94,
+  "included_ids": [
+    "1",
+    "2",
+    "3"
+  ],
+  "threshold": {
+    "frequency_range_hz": [
+      10,
+      2000
+    ],
+    "frequency_points_checked": 93,
+    "frequency_points_outside_limit": 1,
+    "any_exceedance": true,
+    "axes": {
+      "x": {
+        "exceedance_count": 0,
+        "max_ratio": 0.7180390267957775,
+        "exceeded": false
+      },
+      "y": {
+        "exceedance_count": 5,
+        "max_ratio": 1.6282948722146977,
+        "exceeded": true
+      },
+      "z": {
+        "exceedance_count": 28,
+        "max_ratio": 1.9674331230255455,
+        "exceeded": true
+      }
+    },
+    "out_of_range_policy": "No threshold defined, not evaluated"
+  },
+  "shocks": [
+    {
+      "id": "1",
+      "input_file": "C:\\Users\\Дмитрий Кочнев\\Desktop\\Хакатон Бюро\\SRS_refactor_stage1\\SRS_pipeline_with_bin_converter\\hackaton_bauman\\input\\raw_signal_1.csv",
+      "mode": "validation",
+      "status": "validation_completed",
+      "samples": 469,
+      "srs_input_samples": 469,
+      "warnings": [
+        "Fixed grid ends at 2113.48926 Hz, below configured fmax=2500 Hz"
+      ],
+      "reference_file": "C:\\Users\\Дмитрий Кочнев\\Desktop\\Хакатон Бюро\\SRS_refactor_stage1\\SRS_pipeline_with_bin_converter\\hackaton_bauman\\input\\srs_check_1.csv",
+      "comparison": {
+        "status": "compared",
+        "max_grid_difference_hz": 0.0004973140000288367,
+        "x": {
+          "mean_relative_error_pct": 0.0016113640483773003,
+          "max_relative_error_pct": 0.012225840378763272,
+          "max_absolute_error_g": 0.0002376342302294887,
+          "reference_zero_points": 0
+        },
+        "y": {
+          "mean_relative_error_pct": 0.0011900078296507878,
+          "max_relative_error_pct": 0.0074175411088636,
+          "max_absolute_error_g": 0.001063275012882059,
+          "reference_zero_points": 0
+        },
+        "z": {
+          "mean_relative_error_pct": 0.0015503580273961677,
+          "max_relative_error_pct": 0.0096033531887009,
+          "max_absolute_error_g": 0.001051384768537389,
+          "reference_zero_points": 0
+        }
+      }
+    },
+    {
+      "id": "2",
+      "input_file": "C:\\Users\\Дмитрий Кочнев\\Desktop\\Хакатон Бюро\\SRS_refactor_stage1\\SRS_pipeline_with_bin_converter\\hackaton_bauman\\input\\raw_signal_2.csv",
+      "mode": "validation",
+      "status": "validation_completed",
+      "samples": 430,
+      "srs_input_samples": 430,
+      "warnings": [
+        "Fixed grid ends at 2113.48926 Hz, below configured fmax=2500 Hz"
+      ],
+      "reference_file": "C:\\Users\\Дмитрий Кочнев\\Desktop\\Хакатон Бюро\\SRS_refactor_stage1\\SRS_pipeline_with_bin_converter\\hackaton_bauman\\input\\srs_check_2.csv",
+      "comparison": {
+        "status": "compared",
+        "max_grid_difference_hz": 0.0004973140000288367,
+        "x": {
+          "mean_relative_error_pct": 0.002083841201748216,
+          "max_relative_error_pct": 0.014064892293609176,
+          "max_absolute_error_g": 0.0003864583058739157,
+          "reference_zero_points": 0
+        },
+        "y": {
+          "mean_relative_error_pct": 0.001642716375178586,
+          "max_relative_error_pct": 0.007454277315522883,
+          "max_absolute_error_g": 0.0011778996383036144,
+          "reference_zero_points": 0
+        },
+        "z": {
+          "mean_relative_error_pct": 0.0018420764642213426,
+          "max_relative_error_pct": 0.014370550375061275,
+          "max_absolute_error_g": 0.0011513732804608878,
+          "reference_zero_points": 0
+        }
+      }
+    },
+    {
+      "id": "3",
+      "input_file": "C:\\Users\\Дмитрий Кочнев\\Desktop\\Хакатон Бюро\\SRS_refactor_stage1\\SRS_pipeline_with_bin_converter\\hackaton_bauman\\input\\raw_signal_3.csv",
+      "mode": "validation",
+      "status": "validation_completed",
+      "samples": 469,
+      "srs_input_samples": 469,
+      "warnings": [
+        "Fixed grid ends at 2113.48926 Hz, below configured fmax=2500 Hz"
+      ],
+      "reference_file": "C:\\Users\\Дмитрий Кочнев\\Desktop\\Хакатон Бюро\\SRS_refactor_stage1\\SRS_pipeline_with_bin_converter\\hackaton_bauman\\input\\srs_check_3.csv",
+      "comparison": {
+        "status": "compared",
+        "max_grid_difference_hz": 0.0004973140000288367,
+        "x": {
+          "mean_relative_error_pct": 0.0018648209068164183,
+          "max_relative_error_pct": 0.015275486277847378,
+          "max_absolute_error_g": 0.00015235785188316697,
+          "reference_zero_points": 0
+        },
+        "y": {
+          "mean_relative_error_pct": 0.0013835471401307832,
+          "max_relative_error_pct": 0.00871551547733489,
+          "max_absolute_error_g": 0.00045824443834874273,
+          "reference_zero_points": 0
+        },
+        "z": {
+          "mean_relative_error_pct": 0.0015009933956052531,
+          "max_relative_error_pct": 0.010424920279845632,
+          "max_absolute_error_g": 0.0007856888149468944,
+          "reference_zero_points": 0
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "frequency_range_hz": [
+    10,
+    2000
+  ],
+  "frequency_points_checked": 93,
+  "frequency_points_outside_limit": 1,
+  "any_exceedance": true,
+  "axes": {
+    "x": {
+      "exceedance_count": 0,
+      "max_ratio": 0.7180390267957775,
+      "exceeded": false
+    },
+    "y": {
+      "exceedance_count": 5,
+      "max_ratio": 1.6282948722146977,
+      "exceeded": true
+    },
+    "z": {
+      "exceedance_count": 28,
+      "max_ratio": 1.9674331230255455,
+      "exceeded": true
+    }
+  },
+  "out_of_range_policy": "No threshold defined, not evaluated"
+}
