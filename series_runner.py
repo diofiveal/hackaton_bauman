@@ -145,6 +145,39 @@ def _relative_comparison(pc, check, output_path: Path) -> dict[str, Any]:
     return metrics
 
 
+def _print_comparison(comparison: dict[str, Any], label: str) -> None:
+    """Print PC/check deviations; a zero reference has no relative error."""
+    print(f"{label}: PC/check SRS deviation")
+    if comparison.get("status") != "compared":
+        print("  Numerical comparison unavailable: frequency grids differ")
+        return
+    print("  Axis     Max absolute error (g)     Max relative error (%)")
+    for axis in ("x", "y", "z"):
+        metrics = comparison[axis]
+        relative = metrics["max_relative_error_pct"]
+        relative_text = "N/A (zero reference)" if relative is None else f"{relative:.8f}"
+        print(f"  {axis.upper():<8} {metrics['max_absolute_error_g']:<26.9f} {relative_text}")
+        if metrics["reference_zero_points"]:
+            print(f"    Relative error excludes {metrics['reference_zero_points']} zero reference points")
+
+
+def _series_comparison(records: list[dict[str, Any]]) -> dict[str, Any]:
+    comparisons = [row["comparison"] for row in records
+                   if row.get("comparison", {}).get("status") == "compared"]
+    if not comparisons:
+        return {"status": "not_compared", "compared_records": 0}
+    result: dict[str, Any] = {"status": "compared", "compared_records": len(comparisons)}
+    for axis in ("x", "y", "z"):
+        relative = [item[axis]["max_relative_error_pct"] for item in comparisons
+                    if item[axis]["max_relative_error_pct"] is not None]
+        result[axis] = {
+            "max_absolute_error_g": max(item[axis]["max_absolute_error_g"] for item in comparisons),
+            "max_relative_error_pct": max(relative) if relative else None,
+            "reference_zero_points": sum(item[axis]["reference_zero_points"] for item in comparisons),
+        }
+    return result
+
+
 def run_series(args: argparse.Namespace) -> dict[str, Any]:
     config = _configuration(args)
     signals = discover_signals(args.input_dir, args.signal_prefix, args.ids)
@@ -201,6 +234,7 @@ def run_series(args: argparse.Namespace) -> dict[str, Any]:
                                     dest / f"srs_comparison_{layout}.png", layout=layout,
                                     show_limit=True)
             row["comparison"] = _relative_comparison(spectrum, check, dest / "comparison_errors.csv")
+            _print_comparison(row["comparison"], f"[{shock_id}]")
         records.append(row)
     if not pc_spectra:
         raise ValueError("No SRS could be calculated for any input; envelope cannot be built")
@@ -220,6 +254,7 @@ def run_series(args: argparse.Namespace) -> dict[str, Any]:
     plot_envelope_with_limit(envelope, output / "series_envelope_stacked.png", layout="stacked")
     plot_srs_limit(output / "srs_limit.png")
     threshold = write_threshold_reports(envelope, output, source_file=output / "srs_envelope.csv")
+    comparison_summary = _series_comparison(records)
     summary: dict[str, Any] = {
         "mode": args.mode, "profile": args.profile, "input_dir": str(args.input_dir),
         "output_dir": str(output), "requested_files": len(signals),
@@ -227,9 +262,14 @@ def run_series(args: argparse.Namespace) -> dict[str, Any]:
         "frequency_points": int(envelope.frequencies_hz.size),
         "included_ids": list(pc_spectra.keys()),
         "threshold": threshold, "shocks": records,
+        "comparison_summary": comparison_summary,
     }
     (output / "run_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Completed: {len(pc_spectra)}/{len(signals)} SRS; {len(check_spectra)} check spectra")
+    if comparison_summary["status"] == "compared":
+        _print_comparison(comparison_summary, "SERIES MAXIMUM")
+    else:
+        print("PC/check deviations unavailable: no successfully compared reference spectra")
     print(f"Envelope CSV: {output / 'srs_envelope.csv'}")
     print(f"Critical SRS threshold: {threshold['status']} "
           f"({threshold['frequencies_with_any_exceedance']} frequencies exceeded)")
