@@ -13,31 +13,69 @@
     "3"
   ],
   "threshold": {
+    "status": "EXCEEDED",
     "frequency_range_hz": [
-      10,
-      2000
+      10.0,
+      2000.0
     ],
+    "limit_rule": {
+      "10_to_100_hz": "10 + 10*log10(f/10) g",
+      "100_to_1000_hz": "20 g",
+      "1000_to_2000_hz": "20 + 30*(f-1000)/1000 g",
+      "exceedance_condition": "SRS > As (equality is allowed)"
+    },
+    "frequency_points_total": 94,
     "frequency_points_checked": 93,
     "frequency_points_outside_limit": 1,
+    "full_frequency_coverage": false,
+    "outside_limit_frequencies_hz": [
+      2113.48925781
+    ],
+    "frequencies_with_any_exceedance": 28,
     "any_exceedance": true,
     "axes": {
       "x": {
+        "exceeded": false,
         "exceedance_count": 0,
+        "first_exceedance_frequency_hz": null,
+        "last_exceedance_frequency_hz": null,
         "max_ratio": 0.7180390267957775,
-        "exceeded": false
+        "frequency_at_max_ratio_hz": 421.696502686,
+        "max_excess_g": 0.0,
+        "max_excess_percent": 0.0,
+        "frequency_at_max_excess_hz": null,
+        "frequency_at_max_excess_percent_hz": null,
+        "max_srs_within_limit_range_g": 14.360780535915548
       },
       "y": {
+        "exceeded": true,
         "exceedance_count": 5,
+        "first_exceedance_frequency_hz": 74.9894180298,
+        "last_exceedance_frequency_hz": 94.4061050415,
         "max_ratio": 1.6282948722146977,
-        "exceeded": true
+        "frequency_at_max_ratio_hz": 84.139503479,
+        "max_excess_g": 12.094675943600812,
+        "max_excess_percent": 62.82948722146977,
+        "frequency_at_max_excess_hz": 84.139503479,
+        "frequency_at_max_excess_percent_hz": 84.139503479,
+        "max_srs_within_limit_range_g": 31.34467539205705
       },
       "z": {
+        "exceeded": true,
         "exceedance_count": 28,
+        "first_exceedance_frequency_hz": 28.1838321686,
+        "last_exceedance_frequency_hz": 149.623596191,
         "max_ratio": 1.9674331230255455,
-        "exceeded": true
+        "frequency_at_max_ratio_hz": 39.8107261658,
+        "max_excess_g": 15.577844909492793,
+        "max_excess_percent": 96.74331230255456,
+        "frequency_at_max_excess_hz": 42.1696548462,
+        "frequency_at_max_excess_percent_hz": 39.8107261658,
+        "max_srs_within_limit_range_g": 31.82784537328046
       }
     },
-    "out_of_range_policy": "No threshold defined, not evaluated"
+    "out_of_range_policy": "NOT_EVALUATED: no defined threshold outside 10..2000 Hz",
+    "source_file": "C:\\Users\\Дмитрий Кочнев\\Desktop\\Хакатон Бюро\\SRS_refactor_stage1\\SRS_pipeline_with_bin_converter\\hackaton_bauman\\output\\series\\srs_envelope.csv"
   },
   "shocks": [
     {

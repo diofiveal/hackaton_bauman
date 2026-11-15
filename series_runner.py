@@ -12,7 +12,6 @@ spectra are optional and NEVER included in the calculated envelope.
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import re
 import sys
@@ -30,9 +29,10 @@ from pipeline import run_srs_pipeline
 from plots.acceleration import plot_acceleration_with_frame
 from plots.comparison import plot_srs_comparison
 from plots.envelope import plot_envelope
-from plots.limits import plot_srs_limit, srs_limit_g
+from plots.limits import plot_srs_limit
 from plots.series import plot_envelope_with_limit, plot_series_srs, plot_single_srs
 from srs_io import read_srs_csv, save_envelope_csv
+from threshold_check import write_threshold_reports
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -145,46 +145,6 @@ def _relative_comparison(pc, check, output_path: Path) -> dict[str, Any]:
     return metrics
 
 
-def _threshold_report(envelope, output_dir: Path) -> dict[str, Any]:
-    f = envelope.frequencies_hz
-    lim = srs_limit_g(f)
-    valid = np.isfinite(lim)
-    counts = {}
-    ratios = {}
-    flags = {}
-    for axis, arr in (("x", envelope.gx_g), ("y", envelope.gy_g), ("z", envelope.gz_g)):
-        ratio = np.full(f.shape, np.nan, dtype=float)
-        ratio[valid] = arr[valid] / lim[valid]
-        exceed = valid & (arr > lim)
-        ratios[axis] = ratio
-        flags[axis] = exceed
-        counts[axis] = {"exceedance_count": int(np.count_nonzero(exceed)),
-                        "max_ratio": float(np.max(ratio[valid])) if np.any(valid) else None,
-                        "exceeded": bool(np.any(exceed))}
-    csv_path = output_dir / "threshold_report.csv"
-    with csv_path.open("w", newline="", encoding="utf-8") as stream:
-        writer = csv.writer(stream)
-        writer.writerow(("f_hz", "limit_g", "envelope_x_g", "envelope_y_g", "envelope_z_g",
-                         "ratio_x", "ratio_y", "ratio_z", "exceeds_x", "exceeds_y", "exceeds_z", "exceeds_any"))
-        for i, frequency in enumerate(f):
-            writer.writerow((f"{frequency:.17g}", f"{lim[i]:.12g}" if valid[i] else "",
-                            f"{envelope.gx_g[i]:.12g}", f"{envelope.gy_g[i]:.12g}",
-                            f"{envelope.gz_g[i]:.12g}",
-                            *[f"{ratios[a][i]:.12g}" if valid[i] else "" for a in ("x","y","z")],
-                            *[int(flags[a][i]) if valid[i] else "" for a in ("x","y","z")],
-                            int(any(flags[a][i] for a in ("x", "y", "z"))) if valid[i] else ""))
-    report = {
-        "frequency_range_hz": [10, 2000],
-        "frequency_points_checked": int(np.count_nonzero(valid)),
-        "frequency_points_outside_limit": int(np.count_nonzero(~valid)),
-        "any_exceedance": bool(any(v["exceeded"] for v in counts.values())),
-        "axes": counts,
-        "out_of_range_policy": "No threshold defined, not evaluated",
-    }
-    (output_dir / "threshold_report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
-    return report
-
-
 def run_series(args: argparse.Namespace) -> dict[str, Any]:
     config = _configuration(args)
     signals = discover_signals(args.input_dir, args.signal_prefix, args.ids)
@@ -259,7 +219,7 @@ def run_series(args: argparse.Namespace) -> dict[str, Any]:
     plot_envelope_with_limit(envelope, output / "series_envelope_vs_limit.png")
     plot_envelope_with_limit(envelope, output / "series_envelope_stacked.png", layout="stacked")
     plot_srs_limit(output / "srs_limit.png")
-    threshold = _threshold_report(envelope, output)
+    threshold = write_threshold_reports(envelope, output, source_file=output / "srs_envelope.csv")
     summary: dict[str, Any] = {
         "mode": args.mode, "profile": args.profile, "input_dir": str(args.input_dir),
         "output_dir": str(output), "requested_files": len(signals),
@@ -271,6 +231,15 @@ def run_series(args: argparse.Namespace) -> dict[str, Any]:
     (output / "run_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Completed: {len(pc_spectra)}/{len(signals)} SRS; {len(check_spectra)} check spectra")
     print(f"Envelope CSV: {output / 'srs_envelope.csv'}")
+    print(f"Critical SRS threshold: {threshold['status']} "
+          f"({threshold['frequencies_with_any_exceedance']} frequencies exceeded)")
+    for axis_name, axis_info in threshold["axes"].items():
+        print(f"  {axis_name.upper()}: {axis_info['exceedance_count']} frequency points exceeded; "
+              f"max excess {axis_info['max_excess_g']:.6g} g at "
+              f"{axis_info['frequency_at_max_excess_hz']} Hz")
+    if threshold["frequency_points_outside_limit"]:
+        print(f"WARNING: {threshold['frequency_points_outside_limit']} frequencies are "
+              "outside the 10..2000 Hz specified limit (not evaluated)")
     print(f"All plots and reports: {output}")
     return summary
 
